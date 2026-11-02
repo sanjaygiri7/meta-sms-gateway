@@ -107,11 +107,15 @@ public class MainActivity extends AppCompatActivity {
                 deviceId = SecureStore.getDeviceId(MainActivity.this);
             } catch (Exception e) {
                 // Never crash the status screen on a storage/Keystore failure.
+                String keyError = SecureStore.getLastKeystoreError();
+                final String detailText = "Secure storage is unavailable on this device. "
+                        + "Forwarding is OFF. "
+                        + (keyError == null || keyError.isEmpty()
+                                ? "Reopen the app; if this persists, clear the app's storage in Android Settings and try again."
+                                : "Keystore error: " + keyError);
                 runOnUiThread(() -> {
                     status.setText(R.string.status_off);
-                    detail.setText("Secure storage is unavailable on this device. "
-                            + "Forwarding is OFF. Reopen the app; if this persists, "
-                            + "clear the app's storage in Android Settings and try again.");
+                    detail.setText(detailText);
                 });
                 return;
             }
