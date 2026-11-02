@@ -40,13 +40,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk meta-sms-gateway-v3.0.3.apk
-          if gh release view v3.0.3 >/dev/null 2>&1; then
-            gh release upload v3.0.3 meta-sms-gateway-v3.0.3.apk --clobber
+          cp app/build/outputs/apk/debug/app-debug.apk meta-sms-gateway-v3.0.4.apk
+          if gh release view v3.0.4 >/dev/null 2>&1; then
+            gh release upload v3.0.4 meta-sms-gateway-v3.0.4.apk --clobber
           else
-            gh release create v3.0.3 meta-sms-gateway-v3.0.3.apk \
-              --title "Meta SMS Gateway v3.0.3" \
-              --notes "Meta-only Android SMS gateway v3.0.3. Forwards only allowlisted Meta confirmation-code SMS to your own Cloudflare Worker. See README.md for setup. The repository will be made private after this release is published."
+            gh release create v3.0.4 meta-sms-gateway-v3.0.4.apk \
+              --title "Meta SMS Gateway v3.0.4" \
+              --notes "Meta-only Android SMS gateway v3.0.4. Forwards only allowlisted Meta confirmation-code SMS to your own Cloudflare Worker. See README.md for setup. The repository will be made private after this release is published."
           fi
 
   worker:
