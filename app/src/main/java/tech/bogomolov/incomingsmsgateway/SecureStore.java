@@ -3,6 +3,7 @@ package tech.bogomolov.incomingsmsgateway;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyPermanentlyInvalidatedException;
 import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
@@ -70,9 +71,27 @@ public final class SecureStore {
             KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
             ks.load(null);
             if (ks.containsAlias(KEY_ALIAS)) {
-                SecretKey key = (SecretKey) ks.getKey(KEY_ALIAS, null);
-                if (key != null) {
-                    return key;
+                try {
+                    SecretKey key = (SecretKey) ks.getKey(KEY_ALIAS, null);
+                    if (key != null) {
+                        return key;
+                    }
+                } catch (Exception keyFailed) {
+                    // KeyPermanentlyInvalidatedException (a KeyStoreException
+                    // subclass at runtime) means the key was invalidated, e.g.
+                    // by a lock-screen change. The old ciphertexts are
+                    // unrecoverable; drop the alias and generate a fresh key
+                    // instead of crashing every caller. Any other failure is
+                    // rethrown to the outer handler below.
+                    if (keyFailed instanceof KeyPermanentlyInvalidatedException) {
+                        try {
+                            ks.deleteEntry(KEY_ALIAS);
+                        } catch (KeyStoreException ignored) {
+                            // Fall through and attempt generation anyway.
+                        }
+                    } else {
+                        throw keyFailed;
+                    }
                 }
             }
             KeyGenerator kg = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
@@ -89,6 +108,10 @@ public final class SecureStore {
             return kg.generateKey();
         } catch (KeyStoreException | CertificateException | IOException | NoSuchAlgorithmException
                 | NoSuchProviderException | UnrecoverableKeyException | InvalidAlgorithmParameterException e) {
+            throw new IllegalStateException("Keystore key unavailable", e);
+        } catch (RuntimeException e) {
+            // KeyGenerator/Provider failures (e.g. hardware keystore errors)
+            // are unchecked; wrap them so callers see one failure type.
             throw new IllegalStateException("Keystore key unavailable", e);
         }
     }
@@ -109,9 +132,19 @@ public final class SecureStore {
         if (encoded == null) {
             return null;
         }
-        byte[] combined = Base64.decode(encoded, Base64.DEFAULT);
+        byte[] combined;
+        try {
+            combined = Base64.decode(encoded, Base64.DEFAULT);
+        } catch (IllegalArgumentException corrupt) {
+            // Corrupt stored blob: treat as absent (fail closed) instead of
+            // crashing every caller that reads configuration.
+            return null;
+        }
         try {
             return AesGcm.decrypt(getOrCreateKey(), combined);
+        } catch (IllegalStateException decryptionFailed) {
+            // Wrong/invalidated key or tampered blob: treat as absent.
+            return null;
         } finally {
             Arrays.fill(combined, (byte) 0);
         }
