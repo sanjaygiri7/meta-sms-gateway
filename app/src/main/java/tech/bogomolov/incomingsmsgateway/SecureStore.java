@@ -150,7 +150,14 @@ public final class SecureStore {
     }
 
     private static void putEncrypted(Context context, String key, byte[] plaintext) {
-        byte[] combined = AesGcm.encrypt(getOrCreateKey(), plaintext);
+        byte[] combined;
+        try {
+            combined = AesGcm.encrypt(getOrCreateKey(), plaintext);
+        } catch (IllegalStateException encryptFailed) {
+            lastKeyError = "encrypt failed: " + encryptFailed.getClass().getSimpleName()
+                    + (encryptFailed.getMessage() != null ? ": " + encryptFailed.getMessage() : "");
+            throw encryptFailed;
+        }
         String encoded = Base64.encodeToString(combined, Base64.NO_WRAP);
         Arrays.fill(combined, (byte) 0);
         prefs(context).edit().putString(key, encoded).apply();
