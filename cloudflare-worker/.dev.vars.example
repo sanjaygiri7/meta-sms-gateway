@@ -1,0 +1,6 @@
+# Copy to .dev.vars for local development only. Never commit .dev.vars.
+# Fill these in your own terminal. Never paste live secrets into a chat.
+# SMS_HMAC_SECRET is the base64 32-byte secret shown by the Android app.
+# SMS_READ_TOKEN is a separate random token you generate for GET /latest.
+SMS_HMAC_SECRET=""
+SMS_READ_TOKEN=""
