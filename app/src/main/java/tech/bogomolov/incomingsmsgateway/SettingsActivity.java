@@ -74,11 +74,7 @@ public class SettingsActivity extends AppCompatActivity {
         } catch (Exception e) {
             // Secure storage unavailable: show empty fields instead of
             // closing instantly. Saving will surface the same failure.
-            String keyError = SecureStore.getLastKeystoreError();
-            Toast.makeText(this,
-                    keyError == null || keyError.isEmpty()
-                            ? "Secure storage is unavailable on this device."
-                            : "Secure storage unavailable: " + keyError,
+            Toast.makeText(this, storageErrorText(e, "Secure storage is unavailable on this device."),
                     Toast.LENGTH_LONG).show();
         }
         if (url != null) {
@@ -178,6 +174,18 @@ public class SettingsActivity extends AppCompatActivity {
         Toast.makeText(this, toastRes, Toast.LENGTH_SHORT).show();
     }
 
+    /** Prefers the recorded Keystore error; falls back to the caught exception. */
+    private static String storageErrorText(Exception e, String fallback) {
+        String keyError = SecureStore.getLastKeystoreError();
+        String shown = (keyError != null && !keyError.isEmpty()) ? keyError
+                : (e.getClass().getSimpleName()
+                        + (e.getMessage() != null ? ": " + e.getMessage() : ""));
+        if (shown.length() > 200) {
+            shown = shown.substring(0, 200);
+        }
+        return fallback + " Error: " + shown;
+    }
+
     private void refreshObserved() {
         List<String> observed;
         boolean allowlistEmpty;
@@ -249,11 +257,8 @@ public class SettingsActivity extends AppCompatActivity {
                 SecureStore.clearObservedSenders(this);
             }
         } catch (Exception e) {
-            String keyError = SecureStore.getLastKeystoreError();
             Toast.makeText(this,
-                    keyError == null || keyError.isEmpty()
-                            ? "Could not save: secure storage is unavailable on this device."
-                            : "Could not save: " + keyError,
+                    storageErrorText(e, "Could not save: secure storage is unavailable on this device."),
                     Toast.LENGTH_LONG).show();
             return;
         }
