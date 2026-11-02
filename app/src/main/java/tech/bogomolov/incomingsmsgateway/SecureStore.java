@@ -149,10 +149,40 @@ public final class SecureStore {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
     }
 
+    private static void deleteKeyAlias() {
+        try {
+            KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+            ks.load(null);
+            if (ks.containsAlias(KEY_ALIAS)) {
+                ks.deleteEntry(KEY_ALIAS);
+            }
+        } catch (Exception ignored) {
+            // Deletion is best-effort; the retry below surfaces the real failure.
+        }
+    }
+
+    /**
+     * Encrypts with the Keystore key, retrying once with a freshly generated
+     * key if the first attempt fails. This covers a key entry that loads
+     * fine but cannot encrypt (e.g. generated under parameters the device's
+     * Keystore/TEE rejects at use time): deleting the alias and regenerating
+     * is the only recovery, and nothing was stored under the bad key yet.
+     */
+    private static byte[] encryptWithRecovery(byte[] plaintext) {
+        try {
+            return AesGcm.encrypt(getOrCreateKey(), plaintext);
+        } catch (IllegalStateException firstFailure) {
+            lastKeyError = "encrypt failed: " + firstFailure.getClass().getSimpleName()
+                    + (firstFailure.getMessage() != null ? ": " + firstFailure.getMessage() : "");
+            deleteKeyAlias();
+            return AesGcm.encrypt(getOrCreateKey(), plaintext);
+        }
+    }
+
     private static void putEncrypted(Context context, String key, byte[] plaintext) {
         byte[] combined;
         try {
-            combined = AesGcm.encrypt(getOrCreateKey(), plaintext);
+            combined = encryptWithRecovery(plaintext);
         } catch (IllegalStateException encryptFailed) {
             lastKeyError = "encrypt failed: " + encryptFailed.getClass().getSimpleName()
                     + (encryptFailed.getMessage() != null ? ": " + encryptFailed.getMessage() : "");
@@ -354,7 +384,7 @@ public final class SecureStore {
 
     /** Encrypts a raw JSON payload; the returned Base64 holds IV||ciphertext+tag. */
     public static String encryptPayload(Context context, byte[] payload) {
-        byte[] combined = AesGcm.encrypt(getOrCreateKey(), payload);
+        byte[] combined = encryptWithRecovery(payload);
         try {
             return Base64.encodeToString(combined, Base64.NO_WRAP);
         } finally {
