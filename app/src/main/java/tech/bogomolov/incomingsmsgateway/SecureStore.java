@@ -66,7 +66,34 @@ public final class SecureStore {
 
     // ---- Keystore key ----
 
+    private static volatile String lastKeyError;
+
+    /** Last Keystore failure, class + message only, never a key or secret. */
+    public static String getLastKeystoreError() {
+        return lastKeyError;
+    }
+
     static SecretKey getOrCreateKey() {
+        try {
+            return getOrCreateKeyOnce();
+        } catch (IllegalStateException firstFailure) {
+            // One retry after dropping a possibly corrupt alias: a key entry
+            // left half-created by a failed generation can make every later
+            // access fail until the alias is removed.
+            try {
+                KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
+                ks.load(null);
+                if (ks.containsAlias(KEY_ALIAS)) {
+                    ks.deleteEntry(KEY_ALIAS);
+                }
+            } catch (Exception ignored) {
+                // Retry below will surface the real failure.
+            }
+            return getOrCreateKeyOnce();
+        }
+    }
+
+    private static SecretKey getOrCreateKeyOnce() {
         try {
             KeyStore ks = KeyStore.getInstance("AndroidKeyStore");
             ks.load(null);
@@ -108,10 +135,12 @@ public final class SecureStore {
             return kg.generateKey();
         } catch (KeyStoreException | CertificateException | IOException | NoSuchAlgorithmException
                 | NoSuchProviderException | UnrecoverableKeyException | InvalidAlgorithmParameterException e) {
+            lastKeyError = e.getClass().getSimpleName() + ": " + e.getMessage();
             throw new IllegalStateException("Keystore key unavailable", e);
         } catch (RuntimeException e) {
             // KeyGenerator/Provider failures (e.g. hardware keystore errors)
             // are unchecked; wrap them so callers see one failure type.
+            lastKeyError = e.getClass().getSimpleName() + ": " + e.getMessage();
             throw new IllegalStateException("Keystore key unavailable", e);
         }
     }
@@ -144,6 +173,7 @@ public final class SecureStore {
             return AesGcm.decrypt(getOrCreateKey(), combined);
         } catch (IllegalStateException decryptionFailed) {
             // Wrong/invalidated key or tampered blob: treat as absent.
+            lastKeyError = "decrypt failed: " + decryptionFailed.getClass().getSimpleName();
             return null;
         } finally {
             Arrays.fill(combined, (byte) 0);
