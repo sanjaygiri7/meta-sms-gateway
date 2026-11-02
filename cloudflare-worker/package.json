@@ -1,0 +1,18 @@
+{
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261102.1",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.4.0"
+  },
+  "name": "meta-sms-gateway",
+  "private": true,
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "3.0.0"
+}
