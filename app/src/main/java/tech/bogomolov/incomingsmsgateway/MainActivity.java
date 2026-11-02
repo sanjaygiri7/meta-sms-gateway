@@ -107,12 +107,19 @@ public class MainActivity extends AppCompatActivity {
                 deviceId = SecureStore.getDeviceId(MainActivity.this);
             } catch (Exception e) {
                 // Never crash the status screen on a storage/Keystore failure.
+                // Show the caught exception itself: the stored Keystore error
+                // is empty when the failure was in encryption rather than in
+                // key creation, and that distinction is exactly what the
+                // generic message was hiding.
                 String keyError = SecureStore.getLastKeystoreError();
+                String caught = e.getClass().getSimpleName()
+                        + (e.getMessage() != null ? ": " + e.getMessage() : "");
+                String shown = (keyError != null && !keyError.isEmpty()) ? keyError : caught;
+                if (shown.length() > 200) {
+                    shown = shown.substring(0, 200);
+                }
                 final String detailText = "Secure storage is unavailable on this device. "
-                        + "Forwarding is OFF. "
-                        + (keyError == null || keyError.isEmpty()
-                                ? "Reopen the app; if this persists, clear the app's storage in Android Settings and try again."
-                                : "Keystore error: " + keyError);
+                        + "Forwarding is OFF. Error: " + shown;
                 runOnUiThread(() -> {
                     status.setText(R.string.status_off);
                     detail.setText(detailText);
