@@ -1,0 +1,1 @@
+{"$schema":"node_modules/wrangler/config-schema.json","compatibility_date":"2025-01-01","durable_objects":{"bindings":[{"class_name":"MetaInbox","name":"META_INBOX"}]},"main":"src/index.ts","migrations":[{"new_sqlite_classes":["MetaInbox"],"tag":"v1"}],"name":"meta-sms-gateway","vars":{"EXPECTED_DEVICE_ID":"","META_ALLOWED_SENDER_IDS":""},"workers_dev":true}
