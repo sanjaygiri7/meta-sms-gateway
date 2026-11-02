@@ -75,41 +75,88 @@ public class MainActivity extends AppCompatActivity {
 
     private void showStatus() {
         refreshStatus();
-        if (!isServiceRunning()) {
-            startService();
-        }
+        startServiceSafe();
     }
 
+    /**
+     * Keystore reads run off the main thread: key generation and decryption
+     * can block for seconds on some devices, which looked like a freeze,
+     * and any Keystore failure used to escape uncaught and close the app
+     * instantly. Status computation now runs in the background and any
+     * failure shows the OFF state instead of crashing.
+     */
     private void refreshStatus() {
-        TextView status = findViewById(R.id.status_text);
-        TextView detail = findViewById(R.id.status_detail);
+        final TextView status = findViewById(R.id.status_text);
+        final TextView detail = findViewById(R.id.status_detail);
         if (status == null || detail == null) {
             return;
         }
-        boolean smsGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS)
-                == PackageManager.PERMISSION_GRANTED;
-        Set<String> allowlist = SecureStore.getAllowlist(this);
-        String url = SecureStore.getWorkerUrl(this);
-        boolean configured = smsGranted && url != null && !url.isEmpty() && !allowlist.isEmpty()
-                && MetaHttpClient.isValidConfiguredUrl(url);
-        if (!smsGranted) {
-            status.setText(R.string.status_no_permission);
-        } else if (configured) {
-            status.setText(R.string.status_on);
-        } else {
-            status.setText(R.string.status_off);
+        new Thread(() -> {
+            final boolean smsGranted;
+            final Set<String> allowlist;
+            final String url;
+            final int accepted;
+            final String deviceId;
+            try {
+                smsGranted = ContextCompat.checkSelfPermission(
+                        MainActivity.this, Manifest.permission.RECEIVE_SMS)
+                        == PackageManager.PERMISSION_GRANTED;
+                allowlist = SecureStore.getAllowlist(MainActivity.this);
+                url = SecureStore.getWorkerUrl(MainActivity.this);
+                accepted = SecureStore.getAcceptedCount(MainActivity.this);
+                deviceId = SecureStore.getDeviceId(MainActivity.this);
+            } catch (Exception e) {
+                // Never crash the status screen on a storage/Keystore failure.
+                runOnUiThread(() -> {
+                    status.setText(R.string.status_off);
+                    detail.setText("Secure storage is unavailable on this device. "
+                            + "Forwarding is OFF. Reopen the app; if this persists, "
+                            + "clear the app's storage in Android Settings and try again.");
+                });
+                return;
+            }
+            final boolean configured = smsGranted && url != null && !url.isEmpty()
+                    && !allowlist.isEmpty() && MetaHttpClient.isValidConfiguredUrl(url);
+            final String host = url == null ? "" : MetaHttpClient.describeHost(url);
+            runOnUiThread(() -> {
+                if (!smsGranted) {
+                    status.setText(R.string.status_no_permission);
+                } else if (configured) {
+                    status.setText(R.string.status_on);
+                } else {
+                    status.setText(R.string.status_off);
+                }
+                detail.setText(getString(R.string.status_detail, allowlist.size(), host,
+                        accepted, deviceId));
+            });
+        }).start();
+    }
+
+    private void startServiceSafe() {
+        try {
+            if (!isServiceRunning()) {
+                startService();
+            }
+        } catch (Exception ignored) {
+            // Foreground-service start can be refused by the system (e.g.
+            // ForegroundServiceStartNotAllowedException). The SMS receiver
+            // still works without the indicator service; never crash for it.
         }
-        String host = url == null ? "" : MetaHttpClient.describeHost(url);
-        detail.setText(getString(R.string.status_detail, allowlist.size(), host,
-                SecureStore.getAcceptedCount(this), SecureStore.getDeviceId(this)));
     }
 
     private boolean isServiceRunning() {
-        ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
-        for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
-            if (SmsReceiverService.class.getName().equals(service.service.getClassName())) {
-                return true;
+        try {
+            ActivityManager manager = (ActivityManager) getSystemService(ACTIVITY_SERVICE);
+            if (manager == null) {
+                return false;
             }
+            for (ActivityManager.RunningServiceInfo service : manager.getRunningServices(Integer.MAX_VALUE)) {
+                if (SmsReceiverService.class.getName().equals(service.service.getClassName())) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+            return false;
         }
         return false;
     }
