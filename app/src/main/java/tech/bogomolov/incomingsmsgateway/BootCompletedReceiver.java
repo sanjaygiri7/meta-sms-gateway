@@ -10,11 +10,16 @@ public class BootCompletedReceiver extends BroadcastReceiver {
     @SuppressLint("UnsafeProtectedBroadcastReceiver")
     @Override
     public void onReceive(Context context, Intent argIntent) {
-        Intent intent = new Intent(context, SmsReceiverService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(intent);
-        } else {
-            context.startService(intent);
+        try {
+            Intent intent = new Intent(context, SmsReceiverService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+        } catch (Exception ignored) {
+            // A refused foreground-service start at boot must never crash
+            // the receiver; SMS delivery does not depend on this service.
         }
     }
 }
