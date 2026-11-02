@@ -9,8 +9,8 @@ android {
         // 26: Android Keystore AES/GCM and java.time require API 23+/26.
         minSdkVersion 26
         targetSdkVersion 33
-        versionCode 15
-        versionName "3.0.1"
+        versionCode 16
+        versionName "3.0.2"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables.useSupportLibrary = true
