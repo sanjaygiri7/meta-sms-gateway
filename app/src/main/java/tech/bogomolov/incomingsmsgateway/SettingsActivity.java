@@ -64,19 +64,36 @@ public class SettingsActivity extends AppCompatActivity {
         observedContainer = findViewById(R.id.observed_container);
         observedHint = findViewById(R.id.observed_hint);
 
-        String url = SecureStore.getWorkerUrl(this);
+        String url = null;
+        Set<String> allowlist = new LinkedHashSet<>();
+        String deviceId = "";
+        try {
+            url = SecureStore.getWorkerUrl(this);
+            allowlist = SecureStore.getAllowlist(this);
+            deviceId = SecureStore.getDeviceId(this);
+        } catch (Exception e) {
+            // Secure storage unavailable: show empty fields instead of
+            // closing instantly. Saving will surface the same failure.
+            Toast.makeText(this, "Secure storage is unavailable on this device.",
+                    Toast.LENGTH_LONG).show();
+        }
         if (url != null) {
             urlInput.setText(url);
         }
-        Set<String> allowlist = SecureStore.getAllowlist(this);
         if (!allowlist.isEmpty()) {
             allowlistInput.setText(TextUtils.join("\n", allowlist));
         }
-        deviceIdView.setText(SecureStore.getDeviceId(this));
+        deviceIdView.setText(deviceId);
         secretView.setText(R.string.secret_hidden);
 
-        findViewById(R.id.btn_copy_device_id).setOnClickListener(v -> copyText(
-                SecureStore.getDeviceId(this), R.string.copied_device_id));
+        findViewById(R.id.btn_copy_device_id).setOnClickListener(v -> {
+            try {
+                copyText(SecureStore.getDeviceId(this), R.string.copied_device_id);
+            } catch (Exception e) {
+                Toast.makeText(this, "Secure storage is unavailable on this device.",
+                        Toast.LENGTH_LONG).show();
+            }
+        });
 
         Button showSecret = findViewById(R.id.btn_show_secret);
         showSecret.setOnClickListener(v -> showSecretWarning());
@@ -88,7 +105,12 @@ public class SettingsActivity extends AppCompatActivity {
                 Toast.makeText(this, R.string.secret_show_first, Toast.LENGTH_SHORT).show();
                 return;
             }
-            copyText(SecureStore.getHmacSecretBase64(this), R.string.copied_secret);
+            try {
+                copyText(SecureStore.getHmacSecretBase64(this), R.string.copied_secret);
+            } catch (Exception e) {
+                Toast.makeText(this, "Secure storage is unavailable on this device.",
+                        Toast.LENGTH_LONG).show();
+            }
         });
 
         Button regenerate = findViewById(R.id.btn_regenerate_secret);
@@ -114,8 +136,13 @@ public class SettingsActivity extends AppCompatActivity {
                 .setTitle(R.string.secret_warning_title)
                 .setMessage(R.string.secret_warning_message)
                 .setPositiveButton(R.string.btn_show, (dialog, which) -> {
-                    secretView.setText(SecureStore.getHmacSecretBase64(this));
-                    secretView.setTag(Boolean.TRUE);
+                    try {
+                        secretView.setText(SecureStore.getHmacSecretBase64(this));
+                        secretView.setTag(Boolean.TRUE);
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Secure storage is unavailable on this device.",
+                                Toast.LENGTH_LONG).show();
+                    }
                 })
                 .setNegativeButton(R.string.btn_cancel, null)
                 .show();
@@ -126,7 +153,13 @@ public class SettingsActivity extends AppCompatActivity {
                 .setTitle(R.string.regenerate_title)
                 .setMessage(R.string.regenerate_message)
                 .setPositiveButton(R.string.btn_regenerate, (dialog, which) -> {
-                    SecureStore.regenerateHmacSecret(this);
+                    try {
+                        SecureStore.regenerateHmacSecret(this);
+                    } catch (Exception e) {
+                        Toast.makeText(this, "Secure storage is unavailable on this device.",
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
                     secretView.setText(R.string.secret_hidden);
                     secretView.setTag(null);
                     Toast.makeText(this, R.string.regenerated_toast, Toast.LENGTH_LONG).show();
@@ -142,8 +175,16 @@ public class SettingsActivity extends AppCompatActivity {
     }
 
     private void refreshObserved() {
-        List<String> observed = SecureStore.getObservedSenders(this);
-        boolean allowlistEmpty = SecureStore.getAllowlist(this).isEmpty();
+        List<String> observed;
+        boolean allowlistEmpty;
+        try {
+            observed = SecureStore.getObservedSenders(this);
+            allowlistEmpty = SecureStore.getAllowlist(this).isEmpty();
+        } catch (Exception e) {
+            observedHint.setVisibility(View.GONE);
+            observedContainer.setVisibility(View.GONE);
+            return;
+        }
         observedContainer.removeAllViews();
         if (!allowlistEmpty || observed.isEmpty()) {
             observedHint.setVisibility(View.GONE);
@@ -197,10 +238,16 @@ public class SettingsActivity extends AppCompatActivity {
         }
         Set<String> allowlist = new LinkedHashSet<>(MetaFilter.dedupeAllowlist(lines));
         // The allowlist may be empty on purpose: the app then forwards nothing.
-        SecureStore.setWorkerUrl(this, url);
-        SecureStore.setAllowlist(this, allowlist);
-        if (!allowlist.isEmpty()) {
-            SecureStore.clearObservedSenders(this);
+        try {
+            SecureStore.setWorkerUrl(this, url);
+            SecureStore.setAllowlist(this, allowlist);
+            if (!allowlist.isEmpty()) {
+                SecureStore.clearObservedSenders(this);
+            }
+        } catch (Exception e) {
+            Toast.makeText(this, "Could not save: secure storage is unavailable on this device.",
+                    Toast.LENGTH_LONG).show();
+            return;
         }
         Toast.makeText(this, R.string.settings_saved_toast, Toast.LENGTH_SHORT).show();
         refreshObserved();
