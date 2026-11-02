@@ -295,6 +295,30 @@ the only secret *names* present are in code, docs, and the example file.
    originating address as delivered by Android), or shoulder-surfing of
    the displayed HMAC secret. Those are outside the stated requirements.
 
+## 10. v3.0.1 crash-hardening (3 Nov 2026)
+
+After the owner installed v3.0.0, the app closed instantly on open after
+the SMS permission was granted, with a freeze first. No crash log was
+available from the phone, so the exact exception was not observed. Code
+review found the launch path had no protection against the known failure
+modes that produce exactly this symptom: every status-screen read did
+Keystore work on the main thread with no error handling, so any Keystore
+failure (invalidated key, hardware-keystore error, corrupt stored blob)
+escaped uncaught from `onCreate`/`onResume` and closed the app, and the
+Keystore work itself can block the UI for seconds. The foreground
+service start was likewise unguarded.
+
+Fixes in v3.0.1, none of which weaken the security properties above:
+status computation moved to a background thread with failure shown as
+OFF instead of a crash; `SecureStore.getDecrypted` returns null on a
+failed/corrupt decryption (fail closed) instead of throwing; an
+invalidated Keystore key is deleted and regenerated; the foreground
+service and boot receiver stop quietly instead of crashing the process
+on a refused service start; Settings loads/saves are guarded the same
+way. The SMS receive and worker paths already caught these failures.
+If the app still closes on a device, the on-device crash log
+(`adb logcat`) is needed to identify the remaining exception.
+
 ## 9. Verdict
 
 Subject to the limitations in §8, the code as audited implements the
