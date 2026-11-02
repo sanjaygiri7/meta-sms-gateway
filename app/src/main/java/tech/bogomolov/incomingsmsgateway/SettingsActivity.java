@@ -74,7 +74,11 @@ public class SettingsActivity extends AppCompatActivity {
         } catch (Exception e) {
             // Secure storage unavailable: show empty fields instead of
             // closing instantly. Saving will surface the same failure.
-            Toast.makeText(this, "Secure storage is unavailable on this device.",
+            String keyError = SecureStore.getLastKeystoreError();
+            Toast.makeText(this,
+                    keyError == null || keyError.isEmpty()
+                            ? "Secure storage is unavailable on this device."
+                            : "Secure storage unavailable: " + keyError,
                     Toast.LENGTH_LONG).show();
         }
         if (url != null) {
@@ -245,7 +249,11 @@ public class SettingsActivity extends AppCompatActivity {
                 SecureStore.clearObservedSenders(this);
             }
         } catch (Exception e) {
-            Toast.makeText(this, "Could not save: secure storage is unavailable on this device.",
+            String keyError = SecureStore.getLastKeystoreError();
+            Toast.makeText(this,
+                    keyError == null || keyError.isEmpty()
+                            ? "Could not save: secure storage is unavailable on this device."
+                            : "Could not save: " + keyError,
                     Toast.LENGTH_LONG).show();
             return;
         }
